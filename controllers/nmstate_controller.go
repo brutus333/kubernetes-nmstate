@@ -41,6 +41,8 @@ import (
 	nmstatev1beta1 "github.com/nmstate/kubernetes-nmstate/api/v1beta1"
 	"github.com/nmstate/kubernetes-nmstate/pkg/names"
 	nmstaterenderer "github.com/nmstate/kubernetes-nmstate/pkg/render"
+
+	helper "github.com/nmstate/kubernetes-nmstate/pkg/helper"
 )
 
 // NMStateReconciler reconciles a NMState object
@@ -212,12 +214,18 @@ func (r *NMStateReconciler) applyHandler(instance *nmstatev1beta1.NMState) error
 	data.Data["HandlerNodeSelector"] = amd64AndCRNodeSelector
 	data.Data["HandlerTolerations"] = handlerTolerations
 	data.Data["HandlerAffinity"] = corev1.Affinity{}
-	// TODO: This is just a place holder to make template renderer happy
-	//       proper variable has to be read from env or CR
-	data.Data["CARotateInterval"] = ""
-	data.Data["CAOverlapInterval"] = ""
-	data.Data["CertRotateInterval"] = ""
-	data.Data["CertOverlapInterval"] = ""
+	selfSignConfiguration := instance.Spec.SelfSignConfiguration
+	if selfSignConfiguration == (nmstatev1beta1.NMStateSelfSignConfiguration{}) {
+		selfSignConfiguration = *helper.DefaultSelfSignConfiguration()
+	}
+	errs := helper.ValidateSelfSignConfiguration(selfSignConfiguration)
+	if len(errs) > 0 {
+		return errors.Errorf("invalid self sign configuration:\n%s", helper.ErrorListToMultiLineString(errs))
+	}
+	data.Data["CARotateInterval"] = selfSignConfiguration.CARotateInterval
+	data.Data["CAOverlapInterval"] = selfSignConfiguration.CAOverlapInterval
+	data.Data["CertRotateInterval"] = selfSignConfiguration.CertRotateInterval
+	data.Data["CertOverlapInterval"] = selfSignConfiguration.CertOverlapInterval
 	return r.renderAndApply(instance, data, "handler", true)
 }
 
